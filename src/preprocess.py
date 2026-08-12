@@ -36,7 +36,8 @@ from pathlib import Path
 import pandas as pd
 
 
-TASK_BASE = Path(os.environ["PROJECT_ROOT"])
+#TASK_BASE = Path(os.environ["PROJECT_ROOT"])
+TASK_BASE = Path(os.environ["PWD"]) / "../"
 
 RAW_DEFAULT = TASK_BASE / "data" / "raw" / "output_http_csic_2010_weka_with_duplications_RAW-RFC2616_escd_v02_full.csv"
 PROCESSED_DEFAULT = TASK_BASE / "data" / "processed" / "csic_2010_processed.csv"
@@ -77,14 +78,26 @@ OPTIONAL_COLUMNS = [
 GROUP_KEYS = ["source_partition", "index"]
 
 
+# def load_raw_csv(input_path: Path) -> pd.DataFrame:
+#     """Load the raw CSV."""
+#     return pd.read_csv(
+#         input_path,
+#         dtype={"contentType": "string"},
+#         low_memory=False,
+#     )
+
 def load_raw_csv(input_path: Path) -> pd.DataFrame:
     """Load the raw CSV."""
+    # empty cells in the CSV are read as NaN
+    # explicit NaN strings are also read as NaN
+    # other strings like "NA" are not accidentally treated as missing
     return pd.read_csv(
         input_path,
-        dtype={"contentType": "string"},
+        dtype={"content_type": "string"},
         low_memory=False,
+        keep_default_na=False,
+        na_values=[""],
     )
-
 
 def normalize_column_names(df: pd.DataFrame) -> pd.DataFrame:
     """Rename selected columns to snake_case."""
@@ -242,7 +255,6 @@ def fill_selected_missing_values(df: pd.DataFrame) -> pd.DataFrame:
     df["payload"] = df["payload"].fillna("")
 
     return df
-
 
 def validate_output(df: pd.DataFrame) -> None:
     """Validate key output invariants."""
