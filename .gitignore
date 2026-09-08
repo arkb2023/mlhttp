@@ -1,2 +1,5 @@
 *checkpoints/
 *.csv
+*.scratch
+*.ipynb_checkpoints
+__pycache__/
