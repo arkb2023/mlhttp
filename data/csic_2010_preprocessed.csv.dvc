@@ -1,0 +1,6 @@
+outs:
+- md5: 87da1d4023515f06fde7d41f53d2c67a
+  size: 11672013
+  isexec: true
+  hash: md5
+  path: csic_2010_preprocessed.csv
