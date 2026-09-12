@@ -1,3 +1,4 @@
-/csic_2010_raw.csv
+*.csv
 /prepared
 /features
+*.parquet
