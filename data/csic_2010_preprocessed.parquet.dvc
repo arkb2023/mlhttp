@@ -1,0 +1,6 @@
+outs:
+- md5: 0a0df2d18e09ded53fc721b23895fda7
+  size: 4209780
+  isexec: true
+  hash: md5
+  path: csic_2010_preprocessed.parquet
