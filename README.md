@@ -47,7 +47,7 @@ This project detects anomalous HTTP requests (e.g., injection attacks, malformed
 - `method` column with `3` unique values (GET, POST, PUT)
 - `url` column with `1643` unique values. 
 - `host` column has `2` unique values.
-- `contentLength` column has `282` unique values. 
+- `contentLength` column has `382` unique values. 
 - `cookie` column has `61065` unique values. The `cookie` is the Unique Identifier for HTTP Requests 
 - `payload` column with `33769` unique values. The `Payload` are split across multiple rows for the same request. We combine fragments to reconstruct the full payload.   
 - `protocol`, `userAgent`, `pragma`, `cacheControl`, `accept`, `acceptEncoding`, `acceptCharset`, `acceptLanguage`, `connection`, `contentType` all these columns have a single unique value.
