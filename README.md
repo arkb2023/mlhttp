@@ -8,18 +8,18 @@ This project detects anomalous HTTP requests (e.g., injection attacks, malformed
 
 
 ## Approach  
-1. **Raw data Analysis** 
+1. **"Preprocessing & EDA**  
     - **Input:** [CSIC 2010 dataset](https://huggingface.co/datasets/arbk2023/csic_2010/resolve/main/output_http_csic_2010_weka_with_duplications_RAW-RFC2616_escd_v02_full.csv)  
-    - **Processing notebook:** [eda_and_analysis.ipynb](./notebooks/eda_and_analysis.ipynb)
+    - **Processing notebook:** [preprocess.ipynb](./notebooks/preprocess.ipynb)
     - **Output:** Processed dataset [csic_2010_preprocessed.parquet](./data/csic_2010_preprocessed.parquet)  
 2. **Featurisation**
-    - **Input:** Processed dataset [csic_2010_preprocessed.parquet](./data/csic_2010_preprocessed.parquet)  
-    - **Processing notebook:** [featurize.ipynb](./notebooks/featurize.ipynb)
-    - **Output:** Featurized dataset [csic_2010_featurised.parquet](./data/csic_2010_featurised.parquet)  
+    - **Input:** Preprocessed dataset [csic_2010_preprocessed.parquet](./data/csic_2010_preprocessed.parquet)  
+    - **Processing notebook:** [featurise.ipynb](./notebooks/featurise.ipynb)
+    - **Output:** Featurised dataset [csic_2010_featurised.parquet](./data/csic_2010_featurised.parquet)  
 3. **Training & evaluation**
     - **Input:** Featurized dataset [csic_2010_featurised.parquet](./data/csic_2010_featurised.parquet)    
     - **Processing notebook:** [evaluate.ipynb](./notebooks/evaluate.ipynb)
-    - **Output:** [Trained baseline model](./models/model.joblib) & metrics report
+    - **Output:** [Trained baseline model](./models/model.joblib) & [metrics report](./report/metrics.json), [confusion matrix](./report/cm.png) **Fixme**
 
 ## Repository Structure
 
@@ -32,8 +32,8 @@ This project detects anomalous HTTP requests (e.g., injection attacks, malformed
 ├── models/                     # Trained models
 │   └── model.joblib
 ├── notebooks/                  # processing stages
-│   ├── eda_and_analysis.ipynb  # Exploratory data analysis
-│   ├── featurize.ipynb         # Feature engineering
+│   ├── preprocess.ipynb  # Exploratory data analysis
+│   ├── featurise.ipynb         # Feature engineering
 │   └── evaluate.ipynb          # Model training & evaluation
 └── README.md
 ```
