@@ -40,32 +40,24 @@ This project detects anomalous HTTP requests (e.g., injection attacks, malformed
 
 ---
 
-### 1. **Raw dataset Analysis:**    
 
-- The raw dataset contains 223,585 parameter level rows and 18 columns.
-- `index` column shows `36000` unique values whereas total rows count is `223585`, It implies that index column values are not unique. 
-- `method` column with `3` unique values (GET, POST, PUT)
-- `url` column with `1643` unique values. 
-- `host` column has `2` unique values.
-- `contentLength` column has `382` unique values. 
-- `cookie` column has `61065` unique values. The `cookie` is the Unique Identifier for HTTP Requests 
-- `payload` column with `33769` unique values. The `Payload` are split across multiple rows for the same request. We combine fragments to reconstruct the full payload.   
-- `protocol`, `userAgent`, `pragma`, `cacheControl`, `accept`, `acceptEncoding`, `acceptCharset`, `acceptLanguage`, `connection`, `contentType` all these columns have a single unique value.
-- The `label` is the target column with `anom` (anomalous) and `norm` (normal) values
+### 1. Raw Dataset Analysis
 
-Key Findings:  
-1. Values of `index`, `method`, `url`, `host` and `label` columns are consistent (i.e same) for the same `cookie` value. That imples `cookie` is a Unique Identifier for HTTP Requests (one HTTP request)
-3. `Payload` column values are fragmented and spread across multiple rows with same `cookie` value. All these Rows when grouped by `cookie` value share the same `label` classification
-4. When the `223,585` rows are grouped by `cooke` they make up `61065` HTTP requests. 
-5. Payloads for `23881` HTTP requests are fragmented across multiple rows. Each row 
-in when grouped by `cookie` have a different fragment of the payload.  
-6. `25491` HTTP requests have no payload. This is expected for GET requests
-7. `contentLength` for `17,977` HTTP requests have non-null values whereas for 43,088 HTTP requests are `NaN/None` which is expected for GET requests 
-8. The core metadata columns `cookie`, `index`, `method`, `url`, `host`, and `label`, `payload` are fully populated (`61,065` non-null entries). This ensures that each reconstructed HTTP request retains complete metadata. The grouping by `cookie` preserves the integrity of the original requests.  
+- The raw dataset contains **223,585 parameter-level rows** and **18 columns**.  
+- `index` has 36,000 unique values (not unique across rows); `method` has 3 (GET, POST, PUT); `url` has 1,643; `host` has 2; `contentLength` has 382; `cookie` has 61,065; `payload` has 33,769 unique values.  
+- `protocol`, `userAgent`, `pragma`, `cacheControl`, `accept`, `acceptEncoding`, `acceptCharset`, `acceptLanguage`, `connection`, `contentType` each have a **single unique value** (constant i.e. no discriminative power).
+- `label` is the target column: `anom` (anomalous) / `norm` (normal).
 
-Detailed analysis can be found here: [eda_and_analysis.ipynb](./notebooks/eda_and_analysis.ipynb)
+**Key findings:**
+1. Rows are **fragments of HTTP requests**, not independent samples. Values of `index`, `method`, `url`, `host`, and `label` are constant within a `cookie` group.  
+2. **`cookie` is a unique identifier per HTTP request** - verified: `223,585` rows group into exactly `61,065` unique cookies, equal to the unique `(cookie, index)` pairs.  
+3. **Payload reconciliation:** of `61,065` requests, **35,574 have a payload** - 23,881 fragmented across multiple rows (reassembled by concatenation), `~11,693` in a single row — and **25,491 have no payload** (expected for GET requests).  
+4. All rows within a request share the same `label`, classification is request-level, not row-level.
+5. **`contentLength` is structurally aligned with method**: all `43,088` `GET` requests have `NaN`; all `17,580` `POST` and `397` `PUT` requests have a value. The nulls are expected HTTP semantics, not data loss.  
+6. Post-reassembly, all metadata columns (`cookie`, `index`, `method`, `url`, `host`, `label`, `payload`) are fully populated (61,065 non-null) — grouping by `cookie` preserves request integrity.
 
-The output is stored in [csic_2010_preprocessed.parquet](./data/csic_2010_preprocessed.parquet)  
+Detailed analysis: [preprocess.ipynb](./notebooks/preprocess.ipynb)  
+Output: [csic_2010_preprocessed.parquet](./data/csic_2010_preprocessed.parquet)  
 
 ---
 
