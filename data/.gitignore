@@ -2,3 +2,4 @@
 /prepared
 /features
 *.parquet
+/anom_only_urls.paraquet
