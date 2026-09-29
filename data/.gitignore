@@ -3,3 +3,4 @@
 /features
 *.parquet
 /anom_only_urls.paraquet
+/norm_only_urls.paraquet
