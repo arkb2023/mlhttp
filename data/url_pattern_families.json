@@ -1,0 +1,64 @@
+{
+  "extensions": [
+    "\\.(?:bak|old|inc|java)"
+  ],
+  "numeric_id": [
+    "\\d{10,}"
+  ],
+  "trailing_slash": [
+    "^https?://[^/:]+:\\d{1,5}.*/$"
+  ],
+  "adobe_coldfusion": [
+    "CFIDE/"
+  ],
+  "websphere": [
+    "IBMWebAS",
+    "webapp|WebSphere|SmarTicketApp",
+    "estore",
+    "techniques/servlets",
+    "wliconsole",
+    "admin/(?:secure/)?logon\\.jsp$"
+  ],
+  "iis": [
+    "IISSamples",
+    "iisadmin|iisadmpwd",
+    "iisstart|msadc",
+    "/samples/(?:dbsamp|gbook|htmlsamp|isapi|sampsite)/",
+    "/scripts/tools/.*\\.exe"
+  ],
+  "frontpage": [
+    "_cti|_private|_vti",
+    "postinfo\\.html"
+  ],
+  "java": [
+    "WEB-INF",
+    "\\.do$|flash/java/javabean|FlashJavaBean",
+    "jstl-war",
+    "/servlet/(?:Snoop|Hello|Simple|snoop2?|ErrorReporter|aphtpassword|hello)",
+    "worldmusic"
+  ],
+  "lotus_domino": [
+    "\\.nsf$",
+    "/mail\\.box$"
+  ],
+  "asf": [
+    "asf-logo-wide"
+  ],
+  "portal_app": [
+    "e2ePortalProject",
+    "compass/logon\\.jsp$|portalAppAdmin/login\\.jsp$"
+  ],
+  "file": [
+    "databasenotes\\.html"
+  ],
+  "known_scanner_bait": [
+    "^https?://[^/:]+:\\d{1,5}/theme$",
+    "travelnet/|ws-client/loanCalculation\\.jsp$"
+  ],
+  "tilde_backup_file": [
+    "~$|~/|/~$"
+  ],
+  "misc_probes": [
+    "^https?://[^/:]+:\\d{1,5}/\\.jsp$"
+  ]
+}
