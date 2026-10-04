@@ -1,6 +1,0 @@
-outs:
-- md5: 5a7e381e1eac7ae29e8099d4bede60c7
-  size: 19732
-  isexec: true
-  hash: md5
-  path: anom_only_urls.paraquet
