@@ -1,152 +1,131 @@
 # HTTP Traffic Anomaly Detection
-
-Machine learning-based anomaly detection on HTTP request traffic, built on the [CSIC 2010 dataset](http://lexr.ai/csic_dataset/output_http_csic_2010_weka_with_duplications_RAW-RFC2616_escd_v02_full.csv.zip) 
+Machine learning-based anomaly detection on HTTP request traffic, built on the [CSIC 2010 dataset](http://lexr.ai/csic_dataset/output_http_csic_2010_weka_with_duplications_RAW-RFC2616_escd_v02_full.csv.zip)
 
 ## Overview
 
-This project detects anomalous HTTP requests (e.g., injection attacks, malformed traffic) using a supervised classification approach. Raw CSIC 2010 traffic was preprocessed, featurised, and used to train a Random Forest classifier.
+This project detects anomalous HTTP requests. The anomalies include injection
+attempts, scanner probes, and malformed traffic. The method is supervised
+classification.
 
+The CSIC 2010 traffic contains 61,065 requests: 36,000 normal and 25,065
+anomalous. The requests are preprocessed, featurised, and used to train a
+Random Forest classifier. The selected model catches 94.5% of anomalies with
+84.2% precision on a held-out test set.
 
-## Approach  
-1. **"Preprocessing & EDA**  
-    - **Input:** [CSIC 2010 dataset](https://huggingface.co/datasets/arbk2023/csic_2010/resolve/main/output_http_csic_2010_weka_with_duplications_RAW-RFC2616_escd_v02_full.csv)  
-    - **Processing notebook:** [preprocess.ipynb](./notebooks/preprocess.ipynb)
-    - **Output:** Processed dataset [csic_2010_preprocessed.parquet](./data/csic_2010_preprocessed.parquet)  
-2. **Featurisation**
-    - **Input:** Preprocessed dataset [csic_2010_preprocessed.parquet](./data/csic_2010_preprocessed.parquet)  
-    - **Processing notebook:** [featurise.ipynb](./notebooks/featurise.ipynb)
-    - **Output:** Featurised dataset [csic_2010_featurised.parquet](./data/csic_2010_featurised.parquet)  
-3. **Training & evaluation**
-    - **Input:** Featurized dataset [csic_2010_featurised.parquet](./data/csic_2010_featurised.parquet)    
-    - **Processing notebook:** [evaluate.ipynb](./notebooks/evaluate.ipynb)
-    - **Output:** [Trained baseline model](./models/model.joblib) & [metrics report](./report/metrics.json), [confusion matrix](./report/cm.png) **Fixme**
+The URL analysis is the distinctive part of the approach. Anomalous URLs are
+mined into 15 regex pattern families. The families are verified two ways: every
+anomalous URL matches some family, and no family matches any normal URL. The
+verified families are frozen into a registry and become the model's URL-level
+features.
+
+## Approach
+
+Three stages, in order:
+
+1. **Preprocessing & EDA** — [preprocess.ipynb](./notebooks/preprocess.ipynb)
+   - Input: [CSIC 2010 raw CSV](https://petescully.co.uk/research/csic-2010-http-dataset-in-csv-format-for-weka-analysis/)
+   - Parses raw request lines into columns: `method`, `url`, `host`, `payload`,
+     `contentLength`
+   - Drops non-predictive identifiers: `cookie`, `index`
+   - Output: [csic_2010_preprocessed.parquet](./data/csic_2010_preprocessed.parquet)
+
+2. **Featurisation** — [featurise.ipynb](./notebooks/featurise.ipynb)
+   - One-hot encodes `method` and `host`
+   - Derives length and payload-pattern features
+   - Featurisation runs in two passes, with URL analysis in between:
+
+       **2a. URL pattern-family discovery** — [analyse_urls.ipynb](./notebooks/analyse_urls.ipynb)
+       - Decomposes the URL universe: 1,615 anomaly-only URLs, 20 normal-only,
+         8 seen in both classes
+       - Mines the anomalous-only URLs into 15 regex pattern families
+       - Verifies coverage: 1,615 of 1,615 anomalous URLs match a family, and 0
+         normal URLs match.
+       - Output: [url_pattern_families.json](./data/url_pattern_families.json)
+
+       **2b. Feature building**
+       - Builds 15 binary URL features from the pattern registry
+       - Validates every URL feature at request level: zero hits on normal
+         requests
+   - Output: [csic_2010_featurised.parquet](./data/csic_2010_featurised.parquet) —
+     61,065 rows × 33 columns (32 features + target `anomalous`)
+
+3. **Training & evaluation** — [evaluate.ipynb](./notebooks/evaluate.ipynb)
+   - Stratified 70:30 train/test split
+   - Random Forest baseline, two trivial-classifier baselines
+   - `GridSearchCV` tuning with stratified 5-fold CV
+   - Final selection by held-out test F1
+   - Output: [selected model](./models/model.joblib) +
+     [model_metrics.json](./models/model_metrics.json)
 
 ## Repository Structure
 
-```
+```bash
 .
-├── data/                       # Raw, preprocessed, and featurised datasets
-│   ├── csic_2010_raw.csv
-│   ├── csic_2010_preprocessed.parquet
-│   └── csic_2010_featurised.parquet
-├── models/                     # Trained models
-│   └── model.joblib
-├── notebooks/                  # processing stages
-│   ├── preprocess.ipynb  # Exploratory data analysis
-│   ├── featurise.ipynb         # Feature engineering
-│   └── evaluate.ipynb          # Model training & evaluation
+├── data
+│   ├── anom_get_urls_counts.csv          # Anomalous GET URLs, frequency-ranked
+│   ├── anom_only_urls.parquet            # Anomaly-only URLs with label counts
+│   ├── csic_2010_featurised.parquet      # Feature matrix: 61,065 × 33 (32 features + target)
+│   ├── csic_2010_preprocessed.parquet    # Request-level dataset
+│   ├── csic_2010_raw.csv                 # Downloaded raw dataset
+│   ├── norm_only_urls.parquet            # Normal-only URLs with label counts
+│   └── url_pattern_families.json         # Frozen 15-family regex registry
+├── models
+│   ├── model.joblib                      # Selected Random Forest model
+│   └── model_metrics.json                # Model parameters, feature list, test metrics
+├── notebooks
+│   ├── analyse_urls.ipynb                # URL analysis
+│   ├── evaluate.ipynb                    # Model training & evaluation
+│   ├── featurise.ipynb                   # Feature engineering
+│   └── preprocess.ipynb                  # Exploratory data analysis
 └── README.md
 ```
 
----
+## Results
+
+Test set: `18,320` requests (`10,800` normal, `7,520` anomalous), held out from training.  
+
+| Model | Accuracy | Precision | Recall | F1 | FPR | FNR |  
+|---|---|---|---|---|---|---|  
+| RF (default) | 0.9044 | 0.9036 | 0.8588 | 0.8806 | 0.0638 | 0.1412 |  
+| **RF (tuned, selected)** | **0.9046** | 0.8420 | **0.9449** | **0.8905** | 0.1234 | **0.0551** |  
+| Dummy (most frequent) | 0.5895 | 0.0 | 0.0 | 0.0 | 0.0 | 1.0 |  
+| Constant (always anom) | 0.4105 | 0.4105 | 1.0 | 0.5820 | 1.0 | 0.0 |  
+
+The two trivial classifiers are the operating extremes: never alert and always
+alert. A useful detector must beat both F1 values (0.0 and 0.5820). Both Random
+Forests do.
+
+**Selected model:** `RandomForestClassifier(class_weight="balanced", max_depth=15, min_samples_split=10, n_estimators=100)`
+
+- **Selection rule:** highest F1 on the held-out test set. The tuned model scores `0.8905`. The default model scores `0.8806`. The tuned model wins.
+- `class_weight="balanced"` was the decisive parameter. It raises `recall` from `0.8588` to `0.9449`. Missed anomalies drop from `14.1%` to `5.5%`. The tradeoff is `precision`, which falls from `0.9036` to `0.8420`, and false alerts, which rise from `6.4%` to `12.3%`.
+- For intrusion detection, a missed attack costs more than a false alert. The tuned model is the better choice here. If alert volume is the constraint, the default model is the better choice instead.
+- **Cross-validation** scores the default model on `5` folds of the **training split**. The folds are the same ones the **grid search** used. The CV numbers and the held-out test numbers agree to within about `0.002` on every metric, viz. CV recall `0.8609` vs test recall `0.8588`, and CV F1 `0.8797` vs test F1 `0.8806`. This agreement means the model is not overfit, viz. it performs the same on data it trained on and on data it never saw, so the test numbers are not an artifact of one particular split.
+
+## Limitations
+
+- **Split granularity:** The test split is over request rows, not over URLs. Normal URLs repeat heavily in this dataset. Each normal URL appears about 1,000 times. After a row-level split, the same URL appears on both sides. The training set and the test set therefore contain near-identical rows viz. the same URL with slightly different payloads or byte counts. A model can score well on the test set partly by remembering URLs it saw during  training. The test numbers measure performance on repeated traffic. A URL-grouped split, where no URL appears on both sides, is reported in evaluate.ipynb. The two splits bracket the true performance: the row split is the optimistic end, and the grouped split is the conservative end.  Production traffic contains both old and new URLs, so the truth sits between the two numbers.
+- **Lab traffic.** CSIC 2010 is synthetic traffic against one web application (an e-commerce shop). The numbers do not transfer directly to production traffic
+- **Known error concentration.** Almost all residual false negatives sit on `8` endpoints whose URLs look legitimate. These `8` endpoints carry both normal and anomalous traffic. URL features cannot separate the two classes there, viz. the URL patterns of the attacks and of the normal traffic are identical, so only payload and length features can reach them. Improving `recall` further needs better payload and sequence features.
 
 
-### 1. Raw Dataset Analysis
+## Setup
+```bash
+pip install -r requirements.txt
+```
 
-- The raw dataset contains **223,585 parameter-level rows** and **18 columns**.  
-- `index` has 36,000 unique values (not unique across rows); `method` has 3 (GET, POST, PUT); `url` has 1,643; `host` has 2; `contentLength` has 382; `cookie` has 61,065; `payload` has 33,769 unique values.  
-- `protocol`, `userAgent`, `pragma`, `cacheControl`, `accept`, `acceptEncoding`, `acceptCharset`, `acceptLanguage`, `connection`, `contentType` each have a **single unique value** (constant i.e. no discriminative power).
-- `label` is the target column: `anom` (anomalous) / `norm` (normal).
+Run the notebooks in order:
 
-**Key findings:**
-1. Rows are **fragments of HTTP requests**, not independent samples. Values of `index`, `method`, `url`, `host`, and `label` are constant within a `cookie` group.  
-2. **`cookie` is a unique identifier per HTTP request** - verified: `223,585` rows group into exactly `61,065` unique cookies, equal to the unique `(cookie, index)` pairs.  
-3. **Payload reconciliation:** of `61,065` requests, **35,574 have a payload** - 23,881 fragmented across multiple rows (reassembled by concatenation), `~11,693` in a single row — and **25,491 have no payload** (expected for GET requests).  
-4. All rows within a request share the same `label`, classification is request-level, not row-level.
-5. **`contentLength` is structurally aligned with method**: all `43,088` `GET` requests have `NaN`; all `17,580` `POST` and `397` `PUT` requests have a value. The nulls are expected HTTP semantics, not data loss.  
-6. Post-reassembly, all metadata columns (`cookie`, `index`, `method`, `url`, `host`, `label`, `payload`) are fully populated (61,065 non-null) — grouping by `cookie` preserves request integrity.
-
-Detailed analysis: [preprocess.ipynb](./notebooks/preprocess.ipynb)  
-Output: [csic_2010_preprocessed.parquet](./data/csic_2010_preprocessed.parquet)  
-
----
-
-### 2. **Feature Engineering:**  
-Analyse each column to derive numerical and categorical features used in model training. The features that distinguish anomalous requests from normal requests. Analyse the values per column to check for variability and characterestics that could distinguish between normal (norm) and anomalous (anom) requests.
-
-Key Findings:  
-- The `index` column is non-unique and reused across requests so it is not useful in modeling. So we drop the `index` column from the Feature set
-- The `cookie` column has all cookies with length of `43` characters and a consistent format. This implies that the cookie column does not provide any variability that could distinguish between normal (norm) and anomalous (anom) requests. So we drop the `cookie` Column from the Feature set
-- The `method` column provides insight that majority are `GET` `43,088` followed by `POST` `17,580` and `PUT` `397` which can influence anomaly detection. So the method column is transformed into three binary features - `method_GET`, `method_POST`, `method_PUT`. This allows the model to interpret the request type as numerical input while preserving the categorical relationships.
-- The `host` column identifies the `server:port` for the request. The dataset contains only two host values `localhost:8080` and `localhost:9090`. Majority are `localhost:8080` `60,668` followed by `localhost:9090` `397`. This is useful for filtering or grouping requests by host. The `host` column is highly imbalanced, which may limit its predictive power. The host column is transformed into two binary features - `host_localhost:8080` and `host_localhost:9090`  
-- The `url` column is analysed for length, count of special chars, sql patterns, suspicuous patterns and its corresponding classification (i.e anomaly or normal) as indicated in `label` column. It was found that,
-    - Special Characters `/` and `.` are too common and do not help distinguish anomalies whereas `?`, `&`, `=`, `%` do not appear in the dataset, so they provide no signal. So we exclude all special character counts columns from the model
-    - SQL Patterns `select` and `drop` are present and classified as anomalous. Whereas `union`, `insert`, `delete` do not appear in the dataset. So we include `select` and `drop` as binary features to for detecting SQL injection attempts.
-    - Other Suspicious Patterns such as `or`, `script`, `alert`, `comment`, `path traversal`, `parameter` have zero occurrences in the dataset. `Trailing digits` appears in both anom and norm URLs and is not discriminative. `Numeric ID` is a strong indicator of anomalies. All of its occurrences are in anom URLs. So we include `numeric_id` as a binary feature and exclude all other patterns from the model.
-
-- The `payload` column shows patterns of form submissions, login attempts, data entries etc. Typically formatted as `key-value` pairs. We analysed the values for common structure, encoded chars, sql keywords, long numeric string, suspicious patterns etc and its corresponding classification (i.e anomaly or normal) as indicated in `label` column. it was found that,
-    - Special Characters: `&` no occurances and `=` is too common. Both these are not useful. `%` is also common but may be useful when combined with `percent_encoded` pattern. So we exclude `&` and `=`. and use `%` as a feature
-    - SQL Patterns: No occurances of `select` `union`, `delete`. Where as `insert` appears in both `anom` and `norm` but is more common in `anom` (56% of occurrences are anomalous). `drop` appears only in `norm`, so it is not useful for anomaly detection. So we include `insert` as binary feature and exclude all other SQL patterns.  
-    - In other Suspicious Patterns, `>90%` of `quote` `paranthesis` `slash` `alert` are classified as anomalous. `>50%` of `Parameter` `percent_encoded` and `insert` are anomalous. Rest all give almost no signals for anomalous classification. So we Include `quote` `paranthesis` `slash` `alert` `Parameter` `percent_encoded` `insert` and drop the rest
-
-- The `contentLength` column analysis show that 
-    - There is coorelation between increase or decrease in contentLength to anomaly or normal. Small payloads (0-10 bytes) and very large payloads (>200 bytes) have lower anomalies percentages (~40%). Medium payloads (50-200 bytes) have relatively higher anomaly percentage (~66%).
-    - 100% of payloads in this range of 17-32 bytes are anomalous. However the absolute number of requests `638` are very less compared to the total. `64.19%` of payloads that are >108 bytes are anomalous. Other ranges are lesser anomalous percentages. Based on the analysis of `contentLength`, it was concluded that no distinct or consistent pattern emerged that could reliably distinguish between anomalous and normal payloads. For the current iteration, we proceed with the extracted features `is_17_to_32_bytes` and `is_empty_payload` in addition to the original `contentLength` column which already present in the dataset.
-
-- The `label` column which is the target column contains `norm`: 36000 and `anom`: 25065 values. We created a binary target column `anomalous` with `1` for `anom` and `0` for `norm`
-
-Engineered features include:
-- **Length-based**: `url_length`, `payload_length`, `contentLength`
-- **URL patterns**: `url_has_numeric_id`, `url_has_select`, `url_has_drop`
-- **Payload structure**: 'payload_quote_count', 'payload_paren_count' 'payload_slash_count', 'payload_parameter_count', 'payload_percent_count', 'payload_percent_encoded_count',
-- **HTTP metadata**: one-hot encoded method_GET', 'method_POST', 'method_PUT', 'host_localhost:8080', 'host_localhost:9090'
-- **Derived flags**: 'is_17_to_32_bytes', 'is_empty_payload',
-- **Binary target**: 'anomalous'
-
-Detailed analysis can be found here: [featurize.ipynb](./notebooks/featurize.ipynb)
-
-The output is stored in [csic_2010_featurised.parquet](./data/csic_2010_featurised.parquet)  
-
----
-
-### 3. **Training & evaluation**  
-The training and target feature columns are identified  
-The dataset is split into Training and Test data subsets in ratio `70:30`  
-The baseline model is trained using `RandomForestClassifier`
-The Feature Importances are found out from the model
-The model is used to make predictions on the test data subset `30%`  
-The model performance evaluated by comparing model predictions against the actual targets and deriving key metrics    
-The model performance is compared against DummyClassifier and ConstantClassifier model predictions metrics. This guage the effectiveness of the baseline trained model
-Cross Validation is used to further evaluate the model performance.
-
-
-Detailed analysis can be found here: [featurize.ipynb](./notebooks/evaluate.ipynb)
-
-Random Forest classifier basemodel the metric findings:
-| Metric | Score |
-| --- | --- |
-| Accuracy | 0.8834 |
-| Precision | 0.8981 |
-| Recall | 0.8074 |
-| F1-Score | 0.8504 |
-| ROC-AUC | 0.9517 |
-| Average Precision | 0.9464 |
-| Class Imbalance Ratio | 1.44 |
-| Number of Test Samples | 18320 |
-
-- Accuracy `88.34%`, F1-Score: `85.04%`, and ROC-AUC: `95.17%` indicate the model performs well in classifying anomalies
-- Precision `89.81%` and Average Precision: `94.64%`: High reliability in positive predictions (low false positives)
-- Recall `80.74%`: Model captures most anomalies
-- class_imbalance_ratio `1.44`: Indicates class imbalance i.e. ratio of norm/anom in the test targets
-- `~19.26%` chance of false negatives. Further tuning hyperparameters, feature engineering, resampling may enhance recall. (Future Enhancement)
-
-Findings from Feature importance analysis:
-- Features with high imortance  (Importance >= 0.05): `payload_length(`, `url_length`, `payload_percent_count`, `payload_percent_encoded_count`, `contentLength`
-- Features with moderate importance (0.01 <= Importance < 0.05): `url_has_numeric_id`, `payload_quote_count`, `payload_parameter_count`, `payload_slash_count`
-- Features with low importance (Importance < 0.01): `method_PUT`, `payload_paren_count`, `host_localhost:9090`, `host_localhost:8080`, `is_17_to_32_bytes`, `method_GET`, `method_POST`, `is_empty_payload`, `url_has_select`, `url_has_drop`
-
----
-
-## Future Work
-
-- Advanced feature engineering
-- Model comparison (XGBoost, gradient boosting, SVM, Logistic Regression)
-
----
+```bash
+preprocess.ipynb      # raw CSV -> preprocessed parquet
+featurise.ipynb       # pass 1: exports the URL sets
+analyse_urls.ipynb    # URL sets -> pattern-family registry
+featurise.ipynb       # pass 2: registry -> featurised parquet
+evaluate.ipynb        # featurised parquet -> trained model + metrics
+```
 
 **References:**  
-
-- [CSIC 2010 HTTP Dataset in CSV Format by **Peter Scully**](https://petescully.co.uk/research/csic-2010-http-dataset-in-csv-format-for-weka-analysis/)  
+- [CSIC 2010 HTTP dataset in CSV format for Weka analysis — Peter Scully](https://petescully.co.uk/research/csic-2010-http-dataset-in-csv-format-for-weka-analysis/)
 
 ---
 
