@@ -124,6 +124,40 @@ featurise.ipynb       # pass 2: registry -> featurised parquet
 evaluate.ipynb        # featurised parquet -> trained model + metrics
 ```
 
+## Demo
+
+Classify a single HTTP request with the trained model:
+
+```bash
+$ python demo/predict.py --url "http://localhost:8080/tienda1/index.html" --verbose
+
+request: GET /tienda1/index.html (host=localhost:8080)
+feature row (non-zero)
+  method_GET = 1.0
+  host_localhost:8080 = 1.0
+  url_length = 40
+  is_empty_payload = 1
+prediction: normal (anomaly probability 0.1446)
+fired features: method_GET, host_localhost:8080, url_length, is_empty_payload
+```
+
+```bash
+$ python demo/predict.py --method "POST" --url "http://localhost:8080/tienda1/publico/anadir.jsp" --payload "id=3 nombre=Jam%F3n..." --verbose
+
+request: POST /tienda1/publico/anadir.jsp (host=localhost:8080)
+feature row (non-zero)
+  method_POST = 1.0
+  host_localhost:8080 = 1.0
+  url_length = 48
+  payload_parameter_count = 1
+  payload_percent_count = 1
+  payload_percent_encoded_count = 1
+  payload_length = 22
+prediction: anomalous (anomaly probability 0.9701)
+fired features: method_POST, host_localhost:8080, url_length, payload_parameter_count, payload_percent_count, payload_percent_encoded_count, payload_length
+```
+
+
 **References:**  
 - [CSIC 2010 HTTP dataset in CSV format for Weka analysis — Peter Scully](https://petescully.co.uk/research/csic-2010-http-dataset-in-csv-format-for-weka-analysis/)
 
