@@ -126,10 +126,16 @@ evaluate.ipynb        # featurised parquet -> trained model + metrics
 
 ## Demo
 
-Classify a single HTTP request with the trained model:
+[demo/predict.py](./demo/predict.py) classifies a single HTTP request with the trained model.
+It takes the request fields as command-line arguments, applies the same featurization steps as `featurise.ipynb`, loads `models/model.joblib`, and prints the prediction with the features that fired.
+
+1. Model classifies a harmless `GET` request as `normal`
 
 ```bash
-$ python demo/predict.py --url "http://localhost:8080/tienda1/index.html" --verbose
+python demo/predict.py \
+    --method "GET" \
+    --url "http://localhost:8080/tienda1/index.html" \
+    --verbose
 
 request: GET /tienda1/index.html (host=localhost:8080)
 feature row (non-zero)
@@ -141,20 +147,48 @@ prediction: normal (anomaly probability 0.1446)
 fired features: method_GET, host_localhost:8080, url_length, is_empty_payload
 ```
 
-```bash
-$ python demo/predict.py --method "POST" --url "http://localhost:8080/tienda1/publico/anadir.jsp" --payload "id=3 nombre=Jam%F3n..." --verbose
 
-request: POST /tienda1/publico/anadir.jsp (host=localhost:8080)
+2. Model classifies a `GET` request with suspicious URL as `anomalous`
+
+```bash
+python demo/predict.py \
+    --method "GET" \
+    --url "http://localhost:8080/tienda1/publico/autenticar.jsp/6909030637832563290.jsp.java" \
+    --verbose
+request: GET /tienda1/publico/autenticar.jsp/6909030637832563290.jsp.java (host=localhost:8080)
+feature row (non-zero)
+  method_GET = 1.0
+  host_localhost:8080 = 1.0
+  url_has_extensions_probe = 1
+  url_has_numeric_id_probe = 1
+  url_length = 81
+  is_empty_payload = 1
+prediction: anomalous (anomaly probability 1.0000)
+fired features: method_GET, host_localhost:8080, url_has_extensions_probe, url_has_numeric_id_probe, url_length, is_empty_payload
+```
+
+3. Model classifies a `POST` request with suspicious payload as `anomalous`
+
+```bash
+python demo/predict.py \
+    --method "POST" \
+    --url "http://localhost:8080/tienda1/publico/registro.jsp" \
+    --payload "modo=registro%253CSCRIPT%253Ealert%2528%2522Paros%2522%2529%253B%253C%252FSCRIPT%253E&login=armand&password=prusiato&nombre=Samia&apellidos=Catalayud+Mirabet&email=balademas.mareuil6%40enlanzarote.com.vc&dni=28178710F&direccion=C%2F+Cala%2C+9%2C+&ciudad=Mutxamel&cp=25332&provincia=Zaragoza&ntc=8608089924764976&B1=Registrar" \
+    --verbose
+
+request: POST /tienda1/publico/registro.jsp (host=localhost:8080)
 feature row (non-zero)
   method_POST = 1.0
   host_localhost:8080 = 1.0
-  url_length = 48
-  payload_parameter_count = 1
-  payload_percent_count = 1
-  payload_percent_encoded_count = 1
-  payload_length = 22
-prediction: anomalous (anomaly probability 0.9701)
-fired features: method_POST, host_localhost:8080, url_length, payload_parameter_count, payload_percent_count, payload_percent_encoded_count, payload_length
+  url_length = 50
+  payload_slash_count = 1
+  payload_parameter_count = 13
+  payload_percent_count = 14
+  payload_percent_encoded_count = 14
+  payload_has_alert = True
+  payload_length = 324
+prediction: anomalous (anomaly probability 0.9451)
+fired features: method_POST, host_localhost:8080, url_length, payload_slash_count, payload_parameter_count, payload_percent_count, payload_percent_encoded_count, payload_has_alert, payload_length
 ```
 
 
