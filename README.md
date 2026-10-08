@@ -3,14 +3,9 @@ Machine learning-based anomaly detection on HTTP request traffic, built on the [
 
 ## Overview
 
-This project detects anomalous HTTP requests. The anomalies include injection
-attempts, scanner probes, and malformed traffic. The method is supervised
-classification.
+This project detects anomalous HTTP requests. The anomalies include injection attempts, scanner probes, and malformed traffic. The method is supervised classification.
 
-The CSIC 2010 traffic contains 61,065 requests: 36,000 normal and 25,065
-anomalous. The requests are preprocessed, featurised, and used to train a
-Random Forest classifier. The selected model catches 94.5% of anomalies with
-84.2% precision on a held-out test set.
+The CSIC 2010 traffic contains 61,065 requests: 36,000 normal and 25,065 anomalous. The requests are preprocessed, featurised, and used to train a Random Forest classifier. The selected model catches 94.5% of anomalies with 84.2% precision on a held-out test set.
 
 The URL analysis is the distinctive part of the approach. Anomalous URLs are
 mined into 15 regex pattern families. The families are verified two ways: every
@@ -57,6 +52,8 @@ Three stages, in order:
    - Output: [selected model](./models/model.joblib) +
      [model_metrics.json](./models/model_metrics.json)
 
+A demo script, [predict.py](./demo/predict.py), classifies a single HTTP request with the selected model. Applies the same featurisation as `featurise.ipynb`, loads `models/model.joblib`, and prints the prediction with the features that fired. 
+
 ## Repository Structure
 
 ```bash
@@ -73,10 +70,12 @@ Three stages, in order:
 │   ├── model.joblib                      # Selected Random Forest model
 │   └── model_metrics.json                # Model parameters, feature list, test metrics
 ├── notebooks
-│   ├── analyse_urls.ipynb                # URL analysis
+│   ├── analyse_urls.ipynb                # URL pattern-family discovery
 │   ├── evaluate.ipynb                    # Model training & evaluation
 │   ├── featurise.ipynb                   # Feature engineering
 │   └── preprocess.ipynb                  # Exploratory data analysis
+├── demo
+│   └── predict.py                        # Model prediction demo app
 └── README.md
 ```
 
@@ -84,45 +83,120 @@ Three stages, in order:
 
 Test set: `18,320` requests (`10,800` normal, `7,520` anomalous), held out from training.  
 
-| Model | Accuracy | Precision | Recall | F1 | FPR | FNR |  
-|---|---|---|---|---|---|---|  
-| RF (default) | 0.9044 | 0.9036 | 0.8588 | 0.8806 | 0.0638 | 0.1412 |  
-| **RF (tuned, selected)** | **0.9046** | 0.8420 | **0.9449** | **0.8905** | 0.1234 | **0.0551** |  
-| Dummy (most frequent) | 0.5895 | 0.0 | 0.0 | 0.0 | 0.0 | 1.0 |  
-| Constant (always anom) | 0.4105 | 0.4105 | 1.0 | 0.5820 | 1.0 | 0.0 |  
+<div>
+<style scoped>
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
 
-The two trivial classifiers are the operating extremes: never alert and always
-alert. A useful detector must beat both F1 values (0.0 and 0.5820). Both Random
-Forests do.
+    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+
+    .dataframe thead th {
+        text-align: right;
+    }
+</style>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th>accuracy</th>
+      <th>precision</th>
+      <th>recall</th>
+      <th>f1</th>
+      <th>roc_auc</th>
+      <th>average_precision</th>
+      <th>fpr</th>
+      <th>fnr</th>
+    </tr>
+    <tr>
+      <th>model</th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>RandomForest (tuned)</th>
+      <td>0.9046</td>
+      <td>0.8420</td>
+      <td>0.9449</td>
+      <td>0.8905</td>
+      <td>0.9807</td>
+      <td>0.9745</td>
+      <td>0.1234</td>
+      <td>0.0551</td>
+    </tr>
+    <tr>
+      <th>RandomForest (default)</th>
+      <td>0.9044</td>
+      <td>0.9036</td>
+      <td>0.8588</td>
+      <td>0.8806</td>
+      <td>0.9772</td>
+      <td>0.9689</td>
+      <td>0.0638</td>
+      <td>0.1412</td>
+    </tr>
+    <tr>
+      <th>Constant (always anom)</th>
+      <td>0.4105</td>
+      <td>0.4105</td>
+      <td>1.0000</td>
+      <td>0.5820</td>
+      <td>0.5000</td>
+      <td>0.4105</td>
+      <td>1.0000</td>
+      <td>0.0000</td>
+    </tr>
+    <tr>
+      <th>Dummy (most_frequent)</th>
+      <td>0.5895</td>
+      <td>0.0000</td>
+      <td>0.0000</td>
+      <td>0.0000</td>
+      <td>0.5000</td>
+      <td>0.4105</td>
+      <td>0.0000</td>
+      <td>1.0000</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+
+The two trivial classifiers are the operating extremes: never alert and always alert. A useful detector must beat both F1 values (0.0 and 0.5820). Both Random Forests do.
 
 **Selected model:** `RandomForestClassifier(class_weight="balanced", max_depth=15, min_samples_split=10, n_estimators=100)`
 
 - **Selection rule:** highest F1 on the held-out test set. The tuned model scores `0.8905`. The default model scores `0.8806`. The tuned model wins.
 - `class_weight="balanced"` was the decisive parameter. It raises `recall` from `0.8588` to `0.9449`. Missed anomalies drop from `14.1%` to `5.5%`. The tradeoff is `precision`, which falls from `0.9036` to `0.8420`, and false alerts, which rise from `6.4%` to `12.3%`.
 - For intrusion detection, a missed attack costs more than a false alert. The tuned model is the better choice here. If alert volume is the constraint, the default model is the better choice instead.
-- **Cross-validation** scores the default model on `5` folds of the **training split**. The folds are the same ones the **grid search** used. The CV numbers and the held-out test numbers agree to within about `0.002` on every metric, viz. CV recall `0.8609` vs test recall `0.8588`, and CV F1 `0.8797` vs test F1 `0.8806`. This agreement means the model is not overfit, viz. it performs the same on data it trained on and on data it never saw, so the test numbers are not an artifact of one particular split.
+- **Cross-validation** scores the default model on `5` folds of the **training split**. The folds are the same ones the **grid search** used. The CV numbers and the held-out test numbers agree to within about `0.002` on every metric. CV recall `0.8609` vs test recall `0.8588`, and CV F1 `0.8797` vs test F1 `0.8806`. This agreement means the model is not overfit. it performs the same on data it trained on and on data it never saw, so the test numbers are not an artifact of one particular split.
 
-## Limitations
+## Usage
 
-- **Split granularity:** The test split is over request rows, not over URLs. Normal URLs repeat heavily in this dataset. Each normal URL appears about 1,000 times. After a row-level split, the same URL appears on both sides. The training set and the test set therefore contain near-identical rows viz. the same URL with slightly different payloads or byte counts. A model can score well on the test set partly by remembering URLs it saw during  training. The test numbers measure performance on repeated traffic. A URL-grouped split, where no URL appears on both sides, is reported in evaluate.ipynb. The two splits bracket the true performance: the row split is the optimistic end, and the grouped split is the conservative end.  Production traffic contains both old and new URLs, so the truth sits between the two numbers.
-- **Lab traffic.** CSIC 2010 is synthetic traffic against one web application (an e-commerce shop). The numbers do not transfer directly to production traffic
-- **Known error concentration.** Almost all residual false negatives sit on `8` endpoints whose URLs look legitimate. These `8` endpoints carry both normal and anomalous traffic. URL features cannot separate the two classes there, viz. the URL patterns of the attacks and of the normal traffic are identical, so only payload and length features can reach them. Improving `recall` further needs better payload and sequence features.
+- Prerequisites
 
-
-## Setup
 ```bash
 pip install -r requirements.txt
 ```
 
-Run the notebooks in order:
+- Run sequence  
 
-```bash
-preprocess.ipynb      # raw CSV -> preprocessed parquet
-featurise.ipynb       # pass 1: exports the URL sets
-analyse_urls.ipynb    # URL sets -> pattern-family registry
-featurise.ipynb       # pass 2: registry -> featurised parquet
-evaluate.ipynb        # featurised parquet -> trained model + metrics
-```
+1. [notebooks/preprocess.ipynb](./notebooks/preprocess.ipynb): Analyse and transform Raw CSV to preprocessed dataset
+2. [notebooks/featurise.ipynb](./notebooks/featurise.ipynb): Transform preprocessed to featurised dataset
+3. [notebooks/evaluate.ipynb](./notebooks/evaluate.ipynb): Featurised dataset to trained model and metrics 
+4. [./demo/predict.py](./demo/predict.py): Test the model 
+
+> [notebooks/analyse_urls.ipynb](./notebooks/analyse_urls.ipynb): runs inside stage 2. It discovers the URL pattern families used by the featuriser.
 
 ## Demo
 
@@ -146,7 +220,6 @@ feature row (non-zero)
 prediction: normal (anomaly probability 0.1446)
 fired features: method_GET, host_localhost:8080, url_length, is_empty_payload
 ```
-
 
 2. Model classifies a `GET` request with suspicious URL as `anomalous`
 
@@ -191,6 +264,19 @@ prediction: anomalous (anomaly probability 0.9451)
 fired features: method_POST, host_localhost:8080, url_length, payload_slash_count, payload_parameter_count, payload_percent_count, payload_percent_encoded_count, payload_has_alert, payload_length
 ```
 
+## Limitations
+
+- **Test split repeats URLs:** The split is over request rows, not over URLs. Normal URLs repeat heavily in this dataset. Each normal URL appears about 1,000 times. So the same URL ends up in both the training set and the test set. The rows are near-identical. Only the payload or byte counts differ slightly. A model can score well partly by remembering URLs from training. The current test numbers are therefore the optimistic bound. They measure performance on repeated traffic, not on unseen URLs.
+
+- **Known blind spots:** The false negatives sit on `8` endpoints whose URLs look legitimate. Normal and attack traffic use the same URL patterns there. So URL features cannot separate the two classes. Only payload and length features can. Improving recall needs better payload and sequence features.
+
+- **Lab traffic:** CSIC 2010 is synthetic traffic against one web application (an e-commerce shop). The numbers do not transfer directly to production traffic.
+
+## Future work
+
+- **URL-grouped split:** Split the data by URL, not by row. No URL would appear on both sides. This tests the model on URLs it has never seen. The score would drop. It gives the conservative bound. The current row-level numbers are the optimistic bound. Production traffic contains both URLs the model has seen and URLs it has never seen. So the true score sits between the two bounds.
+
+- **Payload and sequence features:** The remaining false negatives need features that look inside the request body. Raw payload statistics, token patterns, or character sequences could reach the `8` blind-spot endpoints. This is the path to higher recall.
 
 **References:**  
 - [CSIC 2010 HTTP dataset in CSV format for Weka analysis — Peter Scully](https://petescully.co.uk/research/csic-2010-http-dataset-in-csv-format-for-weka-analysis/)
