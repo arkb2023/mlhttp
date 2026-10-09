@@ -83,6 +83,10 @@ A demo script, [predict.py](./demo/predict.py), classifies a single HTTP request
 
 Test set: `18,320` requests (`10,800` normal, `7,520` anomalous), held out from training.  
 
+
+
+
+
 <div>
 <style scoped>
     .dataframe tbody tr th:only-of-type {
@@ -125,25 +129,25 @@ Test set: `18,320` requests (`10,800` normal, `7,520` anomalous), held out from 
   <tbody>
     <tr>
       <th>RandomForest (tuned)</th>
-      <td>0.9046</td>
-      <td>0.8420</td>
-      <td>0.9449</td>
-      <td>0.8905</td>
-      <td>0.9807</td>
-      <td>0.9745</td>
-      <td>0.1234</td>
-      <td>0.0551</td>
+      <td>0.9054</td>
+      <td>0.8391</td>
+      <td>0.9521</td>
+      <td>0.8920</td>
+      <td>0.9808</td>
+      <td>0.9746</td>
+      <td>0.1271</td>
+      <td>0.0479</td>
     </tr>
     <tr>
       <th>RandomForest (default)</th>
-      <td>0.9044</td>
-      <td>0.9036</td>
-      <td>0.8588</td>
-      <td>0.8806</td>
-      <td>0.9772</td>
+      <td>0.9045</td>
+      <td>0.9040</td>
+      <td>0.8586</td>
+      <td>0.8807</td>
+      <td>0.9774</td>
       <td>0.9689</td>
-      <td>0.0638</td>
-      <td>0.1412</td>
+      <td>0.0635</td>
+      <td>0.1414</td>
     </tr>
     <tr>
       <th>Constant (always anom)</th>
@@ -171,15 +175,14 @@ Test set: `18,320` requests (`10,800` normal, `7,520` anomalous), held out from 
 </table>
 </div>
 
-
-The two trivial classifiers are the operating extremes: never alert and always alert. A useful detector must beat both F1 values (0.0 and 0.5820). Both Random Forests do.
+The two trivial classifiers are the operating extremes: never alert and always alert. A useful detector must beat both F1 values (`0.0` and `0.5820`). Both Random Forests do.
 
 **Selected model:** `RandomForestClassifier(class_weight="balanced", max_depth=15, min_samples_split=10, n_estimators=100)`
 
-- **Selection rule:** highest F1 on the held-out test set. The tuned model scores `0.8905`. The default model scores `0.8806`. The tuned model wins.
-- `class_weight="balanced"` was the decisive parameter. It raises `recall` from `0.8588` to `0.9449`. Missed anomalies drop from `14.1%` to `5.5%`. The tradeoff is `precision`, which falls from `0.9036` to `0.8420`, and false alerts, which rise from `6.4%` to `12.3%`.
+- **Selection rule:** highest F1 on the held-out test set. The tuned model scores `0.8920`. The default model scores `0.8807`. The tuned model wins.
+- `class_weight="balanced"` was the decisive parameter. It raises `recall` from `0.8586` to `0.9521`. Missed anomalies drop from `14.1%` to `4.8%`. The tradeoff is `precision`, which falls from `0.9040` to `0.8391`, and false alerts, which rise from `6.4%` to `12.7%`.
 - For intrusion detection, a missed attack costs more than a false alert. The tuned model is the better choice here. If alert volume is the constraint, the default model is the better choice instead.
-- **Cross-validation** scores the default model on `5` folds of the **training split**. The folds are the same ones the **grid search** used. The CV numbers and the held-out test numbers agree to within about `0.002` on every metric. CV recall `0.8609` vs test recall `0.8588`, and CV F1 `0.8797` vs test F1 `0.8806`. This agreement means the model is not overfit. it performs the same on data it trained on and on data it never saw, so the test numbers are not an artifact of one particular split.
+- **Cross-validation** scores the default model on `5` folds of the **training split**. The folds are the same ones the **grid search** used. The CV numbers and the held-out test numbers agree to within about `0.002` on every metric. CV recall `0.8605` vs test recall `0.8586`, and CV F1 `0.8796` vs test F1 `0.8807`. This agreement means the model is not overfit. It performs the same on data it trained on and on data it never saw, so the test numbers are not an artifact of one particular split.
 
 ## Usage
 
