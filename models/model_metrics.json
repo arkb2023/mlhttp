@@ -57,14 +57,14 @@
   ],
   "test_metrics": {
     "model": "RandomForest (tuned)",
-    "accuracy": 0.90464,
-    "precision": 0.842043,
-    "recall": 0.944947,
-    "f1": 0.890532,
-    "roc_auc": 0.980745,
-    "average_precision": 0.974483,
-    "fpr": 0.123426,
-    "fnr": 0.055053
+    "accuracy": 0.905404,
+    "precision": 0.839095,
+    "recall": 0.952128,
+    "f1": 0.892045,
+    "roc_auc": 0.980762,
+    "average_precision": 0.974563,
+    "fpr": 0.12713,
+    "fnr": 0.047872
   },
   "cv_protocol": "StratifiedKFold(n_splits=5, shuffle=True, random_state=42)"
 }
