@@ -40,10 +40,8 @@ def load_config():
     registry = json.loads(REGISTRY_PATH.read_text())
     family2feat = {}
     for k in registry:
-      #family2feat = family2feat | {k: f"url_has_{k}_probe"} 
-      family2feat[k] = f"url_has_{k}_probe"
+        family2feat[k] = f"url_has_{k}_probe"
 
-    #print(f"family2feat {family2feat}")
     assert set(family2feat.values()) <= set(train_cols)
 
     featurised = pd.read_parquet(FEATURISED_PATH)
@@ -84,6 +82,7 @@ def build_request(args) -> dict:
 
 def featurise_payload(rec: dict) -> dict:
     """Payload features. Same regexes as featurise.ipynb, applied to one string."""
+    rec["payload"] = " ".join(rec["payload"].split("&"))
     payload = rec["payload"]
     content_length = rec["contentLength"]
     feats = {}
@@ -92,7 +91,7 @@ def featurise_payload(rec: dict) -> dict:
     feats["payload_quote_count"] = len(re.findall(r"'|%27|\"|%22", payload, flags=re.IGNORECASE))
     feats["payload_paren_count"] = len(re.findall(r"\(|\)|%28|%29", payload, flags=re.IGNORECASE))
     feats["payload_slash_count"] = len(re.findall(r"/|%2f", payload, flags=re.IGNORECASE))
-    feats["payload_parameter_count"] = len(re.findall(r"(^|&)[^=&]+=", payload, flags=re.IGNORECASE))
+    feats["payload_parameter_count"] = len(re.findall(r"(^|&|\s)[^=&\s]+=", payload, flags=re.IGNORECASE))    
     feats["payload_percent_count"] = len(re.findall(r"%", payload, flags=re.IGNORECASE))
     feats["payload_percent_encoded_count"] = len(re.findall(r"%[0-9a-fA-F]{2}", payload, flags=re.IGNORECASE))
 
@@ -112,9 +111,8 @@ def featurise_url(url: str, registry: dict, family2feat: dict) -> dict:
     feats["url_length"] = len(url)
 
     for family, pattern_list in registry.items():
-        #assembled_pattern = "|".join(pattern_list)
         assembled_pattern = "|".join(f"(?:{p})" for p in pattern_list)
-        feats[family2feat[family]] = int(bool(re.search(assembled_pattern, url)))
+        feats[family2feat[family]] = int(bool(re.search(assembled_pattern, url, flags=re.IGNORECASE)))
     return feats
 
 def featurise_method(method: str, train_cols: list) -> dict:
@@ -137,7 +135,6 @@ def featurise_request(train_cols: list, rec: dict, registry: dict, family2feat: 
     feats = {}
 
     feats |= featurise_payload(rec)
-    #feats |= featurise_url(rec["url"], registry, family2feat)
     feats |= featurise_url(rec["url_full"], registry, family2feat)
     feats |= featurise_method(rec["method"], train_cols)
     feats |= featurise_host(rec["host"], train_cols)

@@ -220,7 +220,7 @@ feature row (non-zero)
   host_localhost:8080 = 1.0
   url_length = 40
   is_empty_payload = 1
-prediction: normal (anomaly probability 0.1446)
+prediction: normal (anomaly probability 0.1738)
 fired features: method_GET, host_localhost:8080, url_length, is_empty_payload
 ```
 
@@ -231,6 +231,7 @@ python demo/predict.py \
     --method "GET" \
     --url "http://localhost:8080/tienda1/publico/autenticar.jsp/6909030637832563290.jsp.java" \
     --verbose
+
 request: GET /tienda1/publico/autenticar.jsp/6909030637832563290.jsp.java (host=localhost:8080)
 feature row (non-zero)
   method_GET = 1.0
@@ -263,7 +264,7 @@ feature row (non-zero)
   payload_percent_encoded_count = 14
   payload_has_alert = True
   payload_length = 324
-prediction: anomalous (anomaly probability 0.9451)
+prediction: anomalous (anomaly probability 0.9817)
 fired features: method_POST, host_localhost:8080, url_length, payload_slash_count, payload_parameter_count, payload_percent_count, payload_percent_encoded_count, payload_has_alert, payload_length
 ```
 
