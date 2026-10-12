@@ -83,24 +83,7 @@ A demo script, [predict.py](./demo/predict.py), classifies a single HTTP request
 
 Test set: `18,320` requests (`10,800` normal, `7,520` anomalous), held out from training.  
 
-
-
-
-
 <div>
-<style scoped>
-    .dataframe tbody tr th:only-of-type {
-        vertical-align: middle;
-    }
-
-    .dataframe tbody tr th {
-        vertical-align: top;
-    }
-
-    .dataframe thead th {
-        text-align: right;
-    }
-</style>
 <table border="1" class="dataframe">
   <thead>
     <tr style="text-align: right;">
