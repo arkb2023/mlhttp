@@ -5,24 +5,22 @@ Machine learning-based anomaly detection on HTTP request traffic, built on the [
 
 This project detects anomalous HTTP requests. The anomalies include injection attempts, scanner probes, and malformed traffic. The method is supervised classification.
 
-The CSIC 2010 traffic contains 61,065 requests: 36,000 normal and 25,065 anomalous. The requests are preprocessed, featurised, and used to train a Random Forest classifier. The selected model catches 94.5% of anomalies with 84.2% precision on a held-out test set.
+The CSIC 2010 traffic contains 61,065 requests: 36,000 normal and 25,065 anomalous. The requests are preprocessed, featurised, and used to train a Random Forest classifier. On a held-out test set, the selected model catches 95.2% of anomalies at 83.9% precision. A demo script classifies single requests via the command line.
 
-The URL analysis is the distinctive part of the approach. Anomalous URLs are
-mined into 15 regex pattern families. The families are verified two ways: every
-anomalous URL matches some family, and no family matches any normal URL. The
-verified families are frozen into a registry and become the model's URL-level
-features.
+The URL analysis is the distinctive part of the approach. Anomalous URLs are mined into 15 regex pattern families. Each family is verified two ways. Every anomalous URL matches at least one family. No family matches any normal URL. The verified families are frozen into a registry and become the model's URL-level features.
 
 ## Approach
 
 Three stages, in order:
 
 1. **Preprocessing & EDA** — [preprocess.ipynb](./notebooks/preprocess.ipynb)
-   - Input: [CSIC 2010 raw CSV](https://petescully.co.uk/research/csic-2010-http-dataset-in-csv-format-for-weka-analysis/)
-   - Parses raw request lines into columns: `method`, `url`, `host`, `payload`,
-     `contentLength`
-   - Drops non-predictive identifiers: `cookie`, `index`
-   - Output: [csic_2010_preprocessed.parquet](./data/csic_2010_preprocessed.parquet)
+   - Input: [csic_2010_raw.csv](https://huggingface.co/datasets/arbk2023/csic_2010/resolve/main/output_http_csic_2010_weka_with_duplications_RAW-RFC2616_escd_v02_full.csv)  (`223,585` rows × `18` columns)
+    - Inspects columns, types, and nulls, drops 10 constant columns
+    - Deduces that rows are payload fragments, with `cookie` as the request key
+    - Reconstructs one row per request by grouping on `cookie` and joining payload fragments
+    - Verifies the result: `61,065` requests, class split matches the source dataset
+
+   - Output: [csic_2010_preprocessed.parquet](./data/csic_2010_preprocessed.parquet) (`61,065` requests × `8` columns: `cookie`, `index`, `method`, `url`, `host`, `label`, `payload`, `contentLength`)
 
 2. **Featurisation** — [featurise.ipynb](./notebooks/featurise.ipynb)
    - One-hot encodes `method` and `host`
