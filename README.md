@@ -5,52 +5,55 @@ Machine learning-based anomaly detection on HTTP request traffic, built on the [
 
 This project detects anomalous HTTP requests. The anomalies include injection attempts, scanner probes, and malformed traffic. The method is supervised classification.
 
-The CSIC 2010 traffic contains 61,065 requests: 36,000 normal and 25,065 anomalous. The requests are preprocessed, featurised, and used to train a Random Forest classifier. On a held-out test set, the selected model catches 95.2% of anomalies at 83.9% precision. A demo script classifies single requests via the command line.
+The CSIC 2010 traffic contains `61,065` requests: `36,000` normal and `25,065` anomalous. The requests are preprocessed, featurised, and used to train a Random Forest classifier. On a held-out test set, the selected model catches `95.2%` of anomalies at `83.9%` precision. A demo script classifies single requests via the command line.
 
-The URL analysis is the distinctive part of the approach. Anomalous URLs are mined into 15 regex pattern families. Each family is verified two ways. Every anomalous URL matches at least one family. No family matches any normal URL. The verified families are frozen into a registry and become the model's URL-level features.
+The URL analysis is the distinctive part of the approach. Anomalous URLs are mined into `15` regex pattern families. Each family is verified two ways. Every anomalous URL matches at least one family. No family matches any normal URL. The verified families are frozen into a registry and become the model's URL-level features.
 
 ## Approach
 
 Three stages, in order:
 
-1. **Preprocessing & EDA** — [preprocess.ipynb](./notebooks/preprocess.ipynb)
-   - Input: [csic_2010_raw.csv](https://huggingface.co/datasets/arbk2023/csic_2010/resolve/main/output_http_csic_2010_weka_with_duplications_RAW-RFC2616_escd_v02_full.csv)  (`223,585` rows × `18` columns)
+1. **Preprocessing & EDA** - [preprocess.ipynb](./notebooks/preprocess.ipynb)  
+    - **Input:** [csic_2010_raw.csv](https://huggingface.co/datasets/arbk2023/csic_2010/resolve/main/output_http_csic_2010_weka_with_duplications_RAW-RFC2616_escd_v02_full.csv)  (`223,585` rows × `18` columns)
     - Inspects columns, types, and nulls, drops 10 constant columns
     - Deduces that rows are payload fragments, with `cookie` as the request key
     - Reconstructs one row per request by grouping on `cookie` and joining payload fragments
-    - Verifies the result: `61,065` requests, class split matches the source dataset
+    - Verifies the result: `61,065` requests, class split matches the source dataset  
+    - **Output:** [csic_2010_preprocessed.parquet](./data/csic_2010_preprocessed.parquet) (`61,065` requests × `8` columns: `cookie`, `index`, `method`, `url`, `host`, `label`, `payload`, `contentLength`)
 
-   - Output: [csic_2010_preprocessed.parquet](./data/csic_2010_preprocessed.parquet) (`61,065` requests × `8` columns: `cookie`, `index`, `method`, `url`, `host`, `label`, `payload`, `contentLength`)
+2. **Featurisation** - [featurise.ipynb](./notebooks/featurise.ipynb)
 
-2. **Featurisation** — [featurise.ipynb](./notebooks/featurise.ipynb)
-   - One-hot encodes `method` and `host`
-   - Derives length and payload-pattern features
-   - Featurisation runs in two passes, with URL analysis in between:
+    - **Input:** [csic_2010_preprocessed.parquet](./data/csic_2010_featurised.parquet) (61,065 requests × 8 columns)
+    - Drops non-predictive identifiers: `cookie` (unique per request), `index` (sequence artifact)
+    - One-hot encodes `method` and `host`
+    - Derives payload features: counts (`quote`, `paren`, `slash`, `parameter`, `percent`, `percent_encoded`) and flags (`has_alert`, `is_empty_payload`)
+    - Derives length features: `url_length`, `payload_length`, `is_17_to_32_bytes`
+    - Defines the binary target `anomalous` (`anom` = 1, `norm` = 0)
+    - Runs in two passes, with URL analysis in between:
 
-       **2a. URL pattern-family discovery** — [analyse_urls.ipynb](./notebooks/analyse_urls.ipynb)
-       - Decomposes the URL universe: 1,615 anomaly-only URLs, 20 normal-only,
-         8 seen in both classes
-       - Mines the anomalous-only URLs into 15 regex pattern families
-       - Verifies coverage: 1,615 of 1,615 anomalous URLs match a family, and 0
-         normal URLs match.
-       - Output: [url_pattern_families.json](./data/url_pattern_families.json)
+        **2a. URL pattern-family discovery** - [analyse_urls.ipynb](./notebooks/analyse_urls.ipynb)
+        - Splits URLs by label class: `1,615` anomaly-only, `20` normal-only, `8` shared by both classes
+        - Hands the URL extracts to [analyse_urls.ipynb](./notebooks/analyse_urls.ipynb), which mines the anomaly-only URLs into `15` regex pattern families
+        - Verifies coverage: `1,615` of `1,615` anomaly-only URLs match a family, `0` normal or shared URLs match
+        - Output: [url_pattern_families.json](./data/url_pattern_families.json)
 
-       **2b. Feature building**
-       - Builds 15 binary URL features from the pattern registry
-       - Validates every URL feature at request level: zero hits on normal
-         requests
-   - Output: [csic_2010_featurised.parquet](./data/csic_2010_featurised.parquet) —
-     61,065 rows × 33 columns (32 features + target `anomalous`)
+        **2b. Feature building**  
+        - Builds `15` binary URL probe features from the frozen pattern registry
+        - Validates every URL feature at request level: zero hits on normal requests
+   - **Output:** [csic_2010_featurised.parquet](./data/csic_2010_featurised.parquet) - 61,065 rows × 33 columns (32 features + target `anomalous`)
 
-3. **Training & evaluation** — [evaluate.ipynb](./notebooks/evaluate.ipynb)
-   - Stratified 70:30 train/test split
-   - Random Forest baseline, two trivial-classifier baselines
-   - `GridSearchCV` tuning with stratified 5-fold CV
-   - Final selection by held-out test F1
-   - Output: [selected model](./models/model.joblib) +
-     [model_metrics.json](./models/model_metrics.json)
+4. **Training & evaluation** - [evaluate.ipynb](./notebooks/evaluate.ipynb)
+    - **Input:** [csic_2010_featurised.parquet](./data/csic_2010_featurised.parquet) (61,065 requests × 33 columns)
+    - Stratified 70:30 train/test split
+    - Trains a default-hyperparameter Random Forest baseline
+    - Compares against two trivial poles - always-anom and most-frequent
+    - Cross-validates the baseline on 5 stratified folds of the training split
+    - Tunes with `GridSearchCV` over the same folds
+    - Selects the final model by held-out test F1
+    - Validates the selection: CV scores and test scores agree within ~0.002, so the model is not overfit
+    - **Output:** [selected model](./models/model.joblib) + [evaluation metrics](./models/model_metrics.json)
 
-A demo script, [predict.py](./demo/predict.py), classifies a single HTTP request with the selected model. Applies the same featurisation as `featurise.ipynb`, loads `models/model.joblib`, and prints the prediction with the features that fired. 
+---
 
 ## Repository Structure
 
@@ -183,9 +186,7 @@ pip install -r requirements.txt
 > [notebooks/analyse_urls.ipynb](./notebooks/analyse_urls.ipynb): runs inside stage 2. It discovers the URL pattern families used by the featuriser.
 
 ## Demo
-
-[demo/predict.py](./demo/predict.py) classifies a single HTTP request with the trained model.
-It takes the request fields as command-line arguments, applies the same featurization steps as `featurise.ipynb`, loads `models/model.joblib`, and prints the prediction with the features that fired.
+[predict.py](./demo/predict.py) classifies a single HTTP request with the selected model. Applies the same featurisation as `featurise.ipynb`, loads `models/model.joblib`, and prints the prediction with the features that fired. 
 
 1. Model classifies a harmless `GET` request as `normal`
 
@@ -264,7 +265,7 @@ fired features: method_POST, host_localhost:8080, url_length, payload_slash_coun
 - **Payload and sequence features:** The remaining false negatives need features that look inside the request body. Raw payload statistics, token patterns, or character sequences could reach the `8` blind-spot endpoints. This is the path to higher recall.
 
 **References:**  
-- [CSIC 2010 HTTP dataset in CSV format for Weka analysis — Peter Scully](https://petescully.co.uk/research/csic-2010-http-dataset-in-csv-format-for-weka-analysis/)
+- [CSIC 2010 HTTP dataset in CSV format for Weka analysis - Peter Scully](https://petescully.co.uk/research/csic-2010-http-dataset-in-csv-format-for-weka-analysis/)
 
 ---
 
