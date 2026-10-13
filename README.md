@@ -5,54 +5,55 @@ Machine learning-based anomaly detection on HTTP request traffic, built on the [
 
 This project detects anomalous HTTP requests. The anomalies include injection attempts, scanner probes, and malformed traffic. The method is supervised classification.
 
-The CSIC 2010 traffic contains 61,065 requests: 36,000 normal and 25,065 anomalous. The requests are preprocessed, featurised, and used to train a Random Forest classifier. The selected model catches 94.5% of anomalies with 84.2% precision on a held-out test set.
+The CSIC 2010 traffic contains `61,065` requests: `36,000` normal and `25,065` anomalous. The requests are preprocessed, featurised, and used to train a Random Forest classifier. On a held-out test set, the selected model catches `95.2%` of anomalies at `83.9%` precision. A demo script classifies single requests via the command line.
 
-The URL analysis is the distinctive part of the approach. Anomalous URLs are
-mined into 15 regex pattern families. The families are verified two ways: every
-anomalous URL matches some family, and no family matches any normal URL. The
-verified families are frozen into a registry and become the model's URL-level
-features.
+The URL analysis is the distinctive part of the approach. Anomalous URLs are mined into `15` regex pattern families. Each family is verified two ways. Every anomalous URL matches at least one family. No family matches any normal URL. The verified families are frozen into a registry and become the model's URL-level features.
 
 ## Approach
 
 Three stages, in order:
 
-1. **Preprocessing & EDA** — [preprocess.ipynb](./notebooks/preprocess.ipynb)
-   - Input: [CSIC 2010 raw CSV](https://petescully.co.uk/research/csic-2010-http-dataset-in-csv-format-for-weka-analysis/)
-   - Parses raw request lines into columns: `method`, `url`, `host`, `payload`,
-     `contentLength`
-   - Drops non-predictive identifiers: `cookie`, `index`
-   - Output: [csic_2010_preprocessed.parquet](./data/csic_2010_preprocessed.parquet)
+1. **Preprocessing & EDA** - [preprocess.ipynb](./notebooks/preprocess.ipynb)  
+    - **Input:** [csic_2010_raw.csv](https://huggingface.co/datasets/arbk2023/csic_2010/resolve/main/output_http_csic_2010_weka_with_duplications_RAW-RFC2616_escd_v02_full.csv)  (`223,585` rows × `18` columns)
+    - Inspects columns, types, and nulls, drops 10 constant columns
+    - Deduces that rows are payload fragments, with `cookie` as the request key
+    - Reconstructs one row per request by grouping on `cookie` and joining payload fragments
+    - Verifies the result: `61,065` requests, class split matches the source dataset  
+    - **Output:** [csic_2010_preprocessed.parquet](./data/csic_2010_preprocessed.parquet) (`61,065` requests × `8` columns: `cookie`, `index`, `method`, `url`, `host`, `label`, `payload`, `contentLength`)
 
-2. **Featurisation** — [featurise.ipynb](./notebooks/featurise.ipynb)
-   - One-hot encodes `method` and `host`
-   - Derives length and payload-pattern features
-   - Featurisation runs in two passes, with URL analysis in between:
+2. **Featurisation** - [featurise.ipynb](./notebooks/featurise.ipynb)
 
-       **2a. URL pattern-family discovery** — [analyse_urls.ipynb](./notebooks/analyse_urls.ipynb)
-       - Decomposes the URL universe: 1,615 anomaly-only URLs, 20 normal-only,
-         8 seen in both classes
-       - Mines the anomalous-only URLs into 15 regex pattern families
-       - Verifies coverage: 1,615 of 1,615 anomalous URLs match a family, and 0
-         normal URLs match.
-       - Output: [url_pattern_families.json](./data/url_pattern_families.json)
+    - **Input:** [csic_2010_preprocessed.parquet](./data/csic_2010_featurised.parquet) (61,065 requests × 8 columns)
+    - Drops non-predictive identifiers: `cookie` (unique per request), `index` (sequence artifact)
+    - One-hot encodes `method` and `host`
+    - Derives payload features: counts (`quote`, `paren`, `slash`, `parameter`, `percent`, `percent_encoded`) and flags (`has_alert`, `is_empty_payload`)
+    - Derives length features: `url_length`, `payload_length`, `is_17_to_32_bytes`
+    - Defines the binary target `anomalous` (`anom` = 1, `norm` = 0)
+    - Runs in two passes, with URL analysis in between:
 
-       **2b. Feature building**
-       - Builds 15 binary URL features from the pattern registry
-       - Validates every URL feature at request level: zero hits on normal
-         requests
-   - Output: [csic_2010_featurised.parquet](./data/csic_2010_featurised.parquet) —
-     61,065 rows × 33 columns (32 features + target `anomalous`)
+        **2a. URL pattern-family discovery** - [analyse_urls.ipynb](./notebooks/analyse_urls.ipynb)
+        - Splits URLs by label class: `1,615` anomaly-only, `20` normal-only, `8` shared by both classes
+        - Hands the URL extracts to [analyse_urls.ipynb](./notebooks/analyse_urls.ipynb), which mines the anomaly-only URLs into `15` regex pattern families
+        - Verifies coverage: `1,615` of `1,615` anomaly-only URLs match a family, `0` normal or shared URLs match
+        - Output: [url_pattern_families.json](./data/url_pattern_families.json)
 
-3. **Training & evaluation** — [evaluate.ipynb](./notebooks/evaluate.ipynb)
-   - Stratified 70:30 train/test split
-   - Random Forest baseline, two trivial-classifier baselines
-   - `GridSearchCV` tuning with stratified 5-fold CV
-   - Final selection by held-out test F1
-   - Output: [selected model](./models/model.joblib) +
-     [model_metrics.json](./models/model_metrics.json)
+        **2b. Feature building**  
+        - Builds `15` binary URL probe features from the frozen pattern registry
+        - Validates every URL feature at request level: zero hits on normal requests
+   - **Output:** [csic_2010_featurised.parquet](./data/csic_2010_featurised.parquet) - 61,065 rows × 33 columns (32 features + target `anomalous`)
 
-A demo script, [predict.py](./demo/predict.py), classifies a single HTTP request with the selected model. Applies the same featurisation as `featurise.ipynb`, loads `models/model.joblib`, and prints the prediction with the features that fired. 
+4. **Training & evaluation** - [evaluate.ipynb](./notebooks/evaluate.ipynb)
+    - **Input:** [csic_2010_featurised.parquet](./data/csic_2010_featurised.parquet) (61,065 requests × 33 columns)
+    - Stratified 70:30 train/test split
+    - Trains a default-hyperparameter Random Forest baseline
+    - Compares against two trivial poles - always-anom and most-frequent
+    - Cross-validates the baseline on 5 stratified folds of the training split
+    - Tunes with `GridSearchCV` over the same folds
+    - Selects the final model by held-out test F1
+    - Validates the selection: CV scores and test scores agree within ~0.002, so the model is not overfit
+    - **Output:** [selected model](./models/model.joblib) + [evaluation metrics](./models/model_metrics.json)
+
+---
 
 ## Repository Structure
 
@@ -84,19 +85,6 @@ A demo script, [predict.py](./demo/predict.py), classifies a single HTTP request
 Test set: `18,320` requests (`10,800` normal, `7,520` anomalous), held out from training.  
 
 <div>
-<style scoped>
-    .dataframe tbody tr th:only-of-type {
-        vertical-align: middle;
-    }
-
-    .dataframe tbody tr th {
-        vertical-align: top;
-    }
-
-    .dataframe thead th {
-        text-align: right;
-    }
-</style>
 <table border="1" class="dataframe">
   <thead>
     <tr style="text-align: right;">
@@ -125,25 +113,25 @@ Test set: `18,320` requests (`10,800` normal, `7,520` anomalous), held out from 
   <tbody>
     <tr>
       <th>RandomForest (tuned)</th>
-      <td>0.9046</td>
-      <td>0.8420</td>
-      <td>0.9449</td>
-      <td>0.8905</td>
-      <td>0.9807</td>
-      <td>0.9745</td>
-      <td>0.1234</td>
-      <td>0.0551</td>
+      <td>0.9054</td>
+      <td>0.8391</td>
+      <td>0.9521</td>
+      <td>0.8920</td>
+      <td>0.9808</td>
+      <td>0.9746</td>
+      <td>0.1271</td>
+      <td>0.0479</td>
     </tr>
     <tr>
       <th>RandomForest (default)</th>
-      <td>0.9044</td>
-      <td>0.9036</td>
-      <td>0.8588</td>
-      <td>0.8806</td>
-      <td>0.9772</td>
+      <td>0.9045</td>
+      <td>0.9040</td>
+      <td>0.8586</td>
+      <td>0.8807</td>
+      <td>0.9774</td>
       <td>0.9689</td>
-      <td>0.0638</td>
-      <td>0.1412</td>
+      <td>0.0635</td>
+      <td>0.1414</td>
     </tr>
     <tr>
       <th>Constant (always anom)</th>
@@ -171,15 +159,14 @@ Test set: `18,320` requests (`10,800` normal, `7,520` anomalous), held out from 
 </table>
 </div>
 
-
-The two trivial classifiers are the operating extremes: never alert and always alert. A useful detector must beat both F1 values (0.0 and 0.5820). Both Random Forests do.
+The two trivial classifiers are the operating extremes: never alert and always alert. A useful detector must beat both F1 values (`0.0` and `0.5820`). Both Random Forests do.
 
 **Selected model:** `RandomForestClassifier(class_weight="balanced", max_depth=15, min_samples_split=10, n_estimators=100)`
 
-- **Selection rule:** highest F1 on the held-out test set. The tuned model scores `0.8905`. The default model scores `0.8806`. The tuned model wins.
-- `class_weight="balanced"` was the decisive parameter. It raises `recall` from `0.8588` to `0.9449`. Missed anomalies drop from `14.1%` to `5.5%`. The tradeoff is `precision`, which falls from `0.9036` to `0.8420`, and false alerts, which rise from `6.4%` to `12.3%`.
+- **Selection rule:** highest F1 on the held-out test set. The tuned model scores `0.8920`. The default model scores `0.8807`. The tuned model wins.
+- `class_weight="balanced"` was the decisive parameter. It raises `recall` from `0.8586` to `0.9521`. Missed anomalies drop from `14.1%` to `4.8%`. The tradeoff is `precision`, which falls from `0.9040` to `0.8391`, and false alerts, which rise from `6.4%` to `12.7%`.
 - For intrusion detection, a missed attack costs more than a false alert. The tuned model is the better choice here. If alert volume is the constraint, the default model is the better choice instead.
-- **Cross-validation** scores the default model on `5` folds of the **training split**. The folds are the same ones the **grid search** used. The CV numbers and the held-out test numbers agree to within about `0.002` on every metric. CV recall `0.8609` vs test recall `0.8588`, and CV F1 `0.8797` vs test F1 `0.8806`. This agreement means the model is not overfit. it performs the same on data it trained on and on data it never saw, so the test numbers are not an artifact of one particular split.
+- **Cross-validation** scores the default model on `5` folds of the **training split**. The folds are the same ones the **grid search** used. The CV numbers and the held-out test numbers agree to within about `0.002` on every metric. CV recall `0.8605` vs test recall `0.8586`, and CV F1 `0.8796` vs test F1 `0.8807`. This agreement means the model is not overfit. It performs the same on data it trained on and on data it never saw, so the test numbers are not an artifact of one particular split.
 
 ## Usage
 
@@ -199,9 +186,7 @@ pip install -r requirements.txt
 > [notebooks/analyse_urls.ipynb](./notebooks/analyse_urls.ipynb): runs inside stage 2. It discovers the URL pattern families used by the featuriser.
 
 ## Demo
-
-[demo/predict.py](./demo/predict.py) classifies a single HTTP request with the trained model.
-It takes the request fields as command-line arguments, applies the same featurization steps as `featurise.ipynb`, loads `models/model.joblib`, and prints the prediction with the features that fired.
+[predict.py](./demo/predict.py) classifies a single HTTP request with the selected model. Applies the same featurisation as `featurise.ipynb`, loads `models/model.joblib`, and prints the prediction with the features that fired. 
 
 1. Model classifies a harmless `GET` request as `normal`
 
@@ -217,7 +202,7 @@ feature row (non-zero)
   host_localhost:8080 = 1.0
   url_length = 40
   is_empty_payload = 1
-prediction: normal (anomaly probability 0.1446)
+prediction: normal (anomaly probability 0.1738)
 fired features: method_GET, host_localhost:8080, url_length, is_empty_payload
 ```
 
@@ -228,6 +213,7 @@ python demo/predict.py \
     --method "GET" \
     --url "http://localhost:8080/tienda1/publico/autenticar.jsp/6909030637832563290.jsp.java" \
     --verbose
+
 request: GET /tienda1/publico/autenticar.jsp/6909030637832563290.jsp.java (host=localhost:8080)
 feature row (non-zero)
   method_GET = 1.0
@@ -260,7 +246,7 @@ feature row (non-zero)
   payload_percent_encoded_count = 14
   payload_has_alert = True
   payload_length = 324
-prediction: anomalous (anomaly probability 0.9451)
+prediction: anomalous (anomaly probability 0.9817)
 fired features: method_POST, host_localhost:8080, url_length, payload_slash_count, payload_parameter_count, payload_percent_count, payload_percent_encoded_count, payload_has_alert, payload_length
 ```
 
@@ -279,7 +265,7 @@ fired features: method_POST, host_localhost:8080, url_length, payload_slash_coun
 - **Payload and sequence features:** The remaining false negatives need features that look inside the request body. Raw payload statistics, token patterns, or character sequences could reach the `8` blind-spot endpoints. This is the path to higher recall.
 
 **References:**  
-- [CSIC 2010 HTTP dataset in CSV format for Weka analysis — Peter Scully](https://petescully.co.uk/research/csic-2010-http-dataset-in-csv-format-for-weka-analysis/)
+- [CSIC 2010 HTTP dataset in CSV format for Weka analysis - Peter Scully](https://petescully.co.uk/research/csic-2010-http-dataset-in-csv-format-for-weka-analysis/)
 
 ---
 
